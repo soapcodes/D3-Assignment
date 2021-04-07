@@ -127,8 +127,6 @@
             };
         });
 
-        who.forEach(d => { fertilityById[d.id] = +d[fieldColor]; });
-        countries.features.forEach(d => { d.population = fertilityById[d.id] });
 
         body.append("g").call(brush)
         brush.on("brush", function(){
@@ -136,6 +134,10 @@
             let coords = d3.event.selection;
             body.select("g").selectAll("circle")
                 .style("fill", function(){
+                    
+                    who.forEach(d => { fertilityById[d.id] = +d[fieldColor]; });
+                    countries.features.forEach(d => { d.population = fertilityById[d.id] });
+
                     let cx = d3.select(this).attr("cx")
                     let cy = d3.select(this).attr("cy")
 
@@ -147,7 +149,7 @@
                     }
 
 
-                    return selected ? "#93D96D" : color(fertilityById[country])
+                    return selected ? "#93D96D" : color(fertilityById[country]);
                 })
 
             var result = [];
