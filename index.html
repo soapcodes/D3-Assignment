@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+    body {
+        width: 940px;
+        margin: 0 auto;
+        margin-top: 2em;
+        display: flex;
+        flex-wrap: wrap;
+        flex-direction: column;
+    }
+
+    svg {
+        font: 10px sans-serif;
+    }
+
+    .axis path,
+    .axis line {
+        fill: none;
+        stroke: black;
+        shape-rendering: crispEdges;
+    }
+
+    rect.selection {
+        fill: #BFE8FF;
+    }
+
+    p {
+        font-size: 0.7rem;
+    }
+
+
+    .text-box {
+        font-family: Verdana;
+        margin-top: -25px;
+        position: absolute;
+        left: 40%;
+        top: 92%;
+        width: 500px;
+        height: 500px;
+        word-wrap: break-word;
+        overflow: visible;
+    }
+
+</style>
+<body>
+<svg id="map" height="500px" width="1000px" , style="border: solid 1px #000; margin-top: 10px; background-color: #BFE8FF; margin:0 -25px;"">
+    <g id="body2"></g>
+</svg>
+<button onclick="reset()" style="width:5%;" >Reset</button>
+<svg id="scatter" height="480" width="350" , style="margin-top: 10px;">
+    <g id="body3"></g>
+    <g id="yAxis"></g>
+    <g id="xAxis"></g>
+    <div class="text-box">
+        <h3>Selected</h3>
+        <p id="result" width="300px"></p>
+        <p id="result2" width="300px"></p>
+        Please try either the zoom or brush feature but not both simultaneously.
+    </div>
+</svg>
+<script src="d3.js"></script>
+<script src="topojson.v1.min.js"></script>
+<script>
+    // let d3 = import(d3.js);
+    /**
+     * copied from the following resources:
+     * http://bl.ocks.org/micahstubbs/281d7b7a7e39a9b59cf80f1b8bd41a72
+     * http://bl.ocks.org/msbarry/9911363
+     * http://bl.ocks.org/weiglemc/6185069
+     * https://stackoverflow.com/questions/34901593/how-to-filter-an-array-from-all-elements-of-another-array
+     * https://stackoverflow.com/questions/41336663/console-logresult-returns-object-object-how-do-i-get-result-name
+     * https://stackoverflow.com/questions/56638146/how-can-i-change-the-color-of-a-d3-brush
+     * https://bl.ocks.org/d3noob/7030f35b72de721622b8
+     * http://www.d3noob.org/2015/07/clipped-paths-in-d3js-aka-clippath.html
+     * "zoom_interactions", Week 10 Tutorial, CPSC 583, University of Calgary (2021, Winter)
+     * https://d2l.ucalgary.ca/d2l/le/content/358011/viewContent/4613817/View
+     **/
+    let body = d3.select("#body3")
+    let scatter = d3.select("#scatter")
+    let zoom = d3.zoom()
+
+    const margin = {top: 0, right: 0, bottom: 0, left: 0};
+    const width = 960 - margin.left - margin.right;
+    const height = 1000 - margin.top - margin.bottom;
+
+    const color = d3.scaleThreshold()
+        .domain([2, 3, 4, 5, 6, 7, 8])
+        .range( d3.schemeOrRd[7] )
+        .unknown(d3.rgb(230,230,230));
+
+    const color2 = d3.scaleThreshold()
+        .domain([2, 3, 4, 5, 6, 7, 8])
+        .range(["#93D96D"])
+        .unknown(d3.rgb(230,230,230));
+
+
+    const svg = d3.select('#body2')
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+    const map = svg
+        .append('g')
+        .attr('class', 'map');
+
+    const projection = d3.geoMercator()
+        .scale(130)
+        .translate( [width / 2, height / 1.5/2]);
+
+    const path = d3.geoPath().projection(projection);
+
+    Promise.all([
+        d3.csv('who.csv'),
+        d3.json('world_countries.json'),
+        d3.tsv('world_population.tsv')
+    ]).then((data) => {
+        showCharts(data);
+        const fertilityById = {};
+        let who = data[0];
+        let countries = data[1];
+        let fieldColor = 'Total fertility rate (per woman)';
+
+        who.forEach(d => {
+            if(d[fieldColor] == '') {
+                d[fieldColor] = undefined;
+            };
+        });
+
+        who.forEach(d => { fertilityById[d.id] = +d[fieldColor]; });
+        countries.features.forEach(d => { d.population = fertilityById[d.id] });
+        let brush = d3.brush()
+
+        body.append("g").call(brush)
+        brush.on("brush", function(){
+            let selectedCountries = []
+            let coords = d3.event.selection;
+            body.select("g").selectAll("circle")
+                .style("fill", function(){
+                    let cx = d3.select(this).attr("cx")
+                    let cy = d3.select(this).attr("cy")
+
+                    let country = d3.select(this).attr("class").split("COUNTRY-CODE-")[1];
+
+                    let selected = isSelected(coords, cx, cy)
+                    if(selected){
+                        selectedCountries.push(country);
+                    }
+
+
+                    return selected ? "#93D96D" : color(fertilityById[country])
+                })
+
+            var result = [];
+
+            for (var i = 0; i < selectedCountries.length; i++) {
+                for (var j = 0; j < countries.features.length; j++) {
+                    if (countries.features[j].id == selectedCountries[i]){
+                        result.push(countries.features[j].properties.name)
+                    }
+
+                }
+
+            }
+
+            updateMap2(result);
+        });
+    })
+
+    function showCharts(data) {
+
+        const fertilityById = {};
+
+        let who = data[0];
+        let countries = data[1];
+        let population = data[2];
+
+        let fieldColor = 'Total fertility rate (per woman)';
+        let fieldXAxis = "Urban_population_growth";
+        let fieldYAxis = "Urban_population_pct_of_total";
+
+        who.forEach(d => {
+            if(d[fieldColor] == '') {
+                d[fieldColor] = undefined;
+            };
+        });
+
+        population.forEach(d =>
+        {
+            var res = who.find(e =>
+            {
+                return e.Country == d.name;
+            });
+            if(typeof res !== 'undefined') {
+                res.id = d.id;
+            }
+        });
+
+        who.forEach(d => { fertilityById[d.id] = +d[fieldColor]; });
+        countries.features.forEach(d => { d.population = fertilityById[d.id] });
+
+        d3.select('#body2').append('g')
+            .attr('class', 'countries')
+            .selectAll('path')
+            .data(countries.features)
+            .enter().append('path')
+            .attr("class", d => { return "COUNTRY-CODE-"+d.id;} )
+            .attr('d', path)
+            .style('fill', d => color(fertilityById[d.id]))
+            .style('stroke', 'white')
+            .style('opacity', 0.8)
+            .style('stroke-width', 0.3)
+            .on('mouseover',function(d){})
+            .on('mouseout', function(d){});
+
+        svg.append('path')
+            .datum(topojson.mesh(countries.features, (a, b) => a.id !== b.id))
+            .attr('class', 'names')
+            .attr('d', path);
+
+        // setup x
+        var xValue = function(d) { return d[fieldXAxis];}, // data -> value
+            xScale = d3.scaleLinear().range([0, height/2-100]), // value -> display
+            xMap = function(d) { return xScale(xValue(d));}, // data -> display
+            xAxis = d3.axisBottom().scale(xScale);
+
+        // setup y
+        var yValue = function(d) { return d[fieldYAxis];}, // data -> value
+            yScale = d3.scaleLinear().range([height/2-100, 0]), // value -> display
+            yMap = function(d) { return yScale(yValue(d));}, // data -> display
+            yAxis = d3.axisLeft().scale(yScale);
+
+        // don't want dots overlapping axis, so add in buffer to data domain
+        xScale.domain([-3, 9]);
+        yScale.domain([0, 110]);
+
+        let yAxisGroup = d3.select("#yAxis")
+            .attr("class", "y axis")
+            .style("transform", "translate(25px, 0px)")
+            .call(yAxis)
+
+        let xAxisGroup = d3.select("#xAxis")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + (height/2-100) + ")")
+            .call(xAxis)
+
+        // create a clipping region
+        body.append("defs").append("clipPath")
+            .attr("id", "clip")
+            .append("rect")
+            .attr("width", 350-25)
+            .attr("height", 400)
+            .attr("transform", "translate(" + "25" + "," + "0" + ")");
+
+        var plotArea = body.append("g")
+            .attr("clip-path","url(#clip)");
+
+        let join = plotArea.selectAll("circle")
+            .data(who)
+
+        let newelements = join.enter()
+            .append("circle")
+            .on("click", function(d){click(d)})
+            .attr("class", d => { return "COUNTRY-CODE-"+d.id; } )
+            .attr("r", 3.5)
+            .attr("cx", xMap)
+            .attr("cy", yMap)
+            .style("fill", function(d) { return color(d[fieldColor]);})
+            .on("mouseover", function(d) {})
+            .on("mouseout", function(d) {})
+
+        join.merge(newelements)
+            .transition()
+            .attr("cx", xMap)
+            .attr("cy", yMap)
+
+        zoom.scaleExtent([1,5])
+        zoom.on("zoom", function(){
+            let newXScale = d3.event.transform.rescaleX(xScale)
+            let newYScale = d3.event.transform.rescaleY(yScale)
+
+            xAxis.scale(newXScale)
+            xAxisGroup.call(xAxis)
+            yAxis.scale(newYScale)
+            yAxisGroup.call(yAxis)
+
+            xValue = function(d) { return d[fieldXAxis];}, // data -> value
+                xMap = function(d) { return newXScale(xValue(d));}, // data -> display
+
+            // setup y
+            yValue = function(d) { return d[fieldYAxis];}, // data -> value
+                yMap = function(d) { return newYScale(yValue(d));}, // data -> display
+
+            join.merge(newelements)
+                .transition()
+                .attr("cx", xMap)
+                .attr("cy", yMap)
+
+            let xMin = newXScale.domain()[0];
+            let xMax = newXScale.domain()[1];
+            let yMin = newYScale.domain()[0];
+            let yMax = newYScale.domain()[1];
+
+            updateMap(xMin, xMax, yMin, yMax)
+
+        })
+
+        scatter.call(zoom)
+
+    }
+
+function reset(){
+        scatter.transition()
+            .duration(100)
+            .call(zoom.transform, d3.zoomIdentity.scale(1));
+    }
+
+    function updateMap(xMin, xMax, yMin, yMax){
+        Promise.all([
+            d3.csv('who.csv'),
+            d3.json('world_countries.json'),
+            d3.tsv('world_population.tsv')
+        ]).then((data) => {
+
+            const fertilityById = {};
+
+            let who = data[0];
+            let countries = data[1];
+            let population = data[2];
+
+            let fieldColor = 'Total fertility rate (per woman)';
+            let fieldXAxis = "Urban_population_growth";
+            let fieldYAxis = "Urban_population_pct_of_total";
+
+            who.forEach(d => {
+                if(d[fieldColor] == '') {
+                    d[fieldColor] = undefined;
+                };
+            });
+
+            population.forEach(d =>
+            {
+                var res = who.find(e =>
+                {
+                    return e.Country == d.name;
+                });
+                if(typeof res !== 'undefined') {
+                    res.id = d.id;
+                }
+            });
+
+            who = who.filter(function(d){ return d[fieldXAxis] > xMin && d[fieldXAxis] < xMax})
+            who = who.filter(function(d){ return d[fieldYAxis] > yMin && d[fieldYAxis] < yMax})
+            console.log("yMin: " + yMin + " yMFax: " + yMax + " xMin: " + xMin + " xMax: " + xMax);
+
+            who.forEach(d => { fertilityById[d.id] = +d[fieldColor]; });
+            let countriesResult = who.map(function(d) {
+                return d["Country"];
+            })
+
+            document.getElementById("result2").innerHTML = "";
+            document.getElementById("result").innerHTML = countriesResult.toString();
+
+            countries.features.forEach(d => { d.population = fertilityById[d.id] });
+
+            d3.select('#body2').select('svg').remove();
+
+            var svg2 = d3.select('#body2')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height)
+                .append('g')
+                .attr('class', 'countries')
+                .selectAll('path')
+                .data(countries.features)
+                .enter().append('path')
+                .attr("class", d => { return "COUNTRY-CODE-"+d.id;} )
+                .attr('d', path)
+                .style('fill', d => color(fertilityById[d.id]))
+                .style('stroke', 'white')
+                .style('opacity', 1)
+                .style('stroke-width', 0.3)
+                .on('mouseover',function(d){})
+                .on('mouseout', function(d){});
+
+            svg2.append('path')
+                .datum(topojson.mesh(countries.features, (a, b) => a.id !== b.id))
+                .attr('class', 'names')
+                .attr('d', path);
+        });
+    }
+
+    function updateMap2(arr){
+        Promise.all([
+            d3.csv('who.csv'),
+            d3.json('world_countries.json'),
+            d3.tsv('world_population.tsv')
+        ]).then((data) => {
+
+            const fertilityById = {};
+
+            let who = data[0];
+            let countries = data[1];
+            let population = data[2];
+
+            let fieldColor = 'Total fertility rate (per woman)';
+
+            who.forEach(d => {
+                if(d[fieldColor] == '') {
+                    d[fieldColor] = undefined;
+                };
+            });
+
+            population.forEach(d =>
+            {
+                var res = who.find(e =>
+                {
+                    return e.Country == d.name;
+                });
+                if(typeof res !== 'undefined') {
+                    res.id = d.id;
+                }
+            });
+
+            //console.log("Brush result: " + JSON.stringify(arr))
+
+            let countriesResult = []
+
+            who.forEach(d => {
+                for (var i = 0; i < arr.length; i++) {
+                    if (d["Country"] == arr[i]){
+                        countriesResult.push(arr[i])
+                    }
+
+                }
+            });
+
+            who = who.filter(
+                function(d) {
+                    return this.indexOf(d["Country"]) >= 0;
+                },
+                arr
+            );
+
+            who.forEach(d => { fertilityById[d.id] = +d[fieldColor]; });
+
+            console.log(who);
+
+            console.log("Brush result: " + JSON.stringify(countriesResult))
+
+            document.getElementById("result").innerHTML = "";
+            document.getElementById("result2").innerHTML = countriesResult.toString();
+
+            who.forEach(d => { d.population = fertilityById[d.id] });
+
+            d3.select('#body2').select('svg').remove();
+
+            var svg2 = d3.select('#body2')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height)
+                .append('g')
+                .attr('class', 'countries')
+                .selectAll('path')
+                .data(countries.features)
+                .enter().append('path')
+                .attr("class", d => { return "COUNTRY-CODE-"+d.id;} )
+                .attr('d', path)
+                .style('fill', d => color2(fertilityById[d.id]))
+                .style('stroke', 'white')
+                .style('opacity', 1)
+                .style('stroke-width', 0.3)
+                .on('mouseover',function(d){})
+                .on('mouseout', function(d){});
+
+            svg2.append('path')
+                .datum(topojson.mesh(countries.features, (a, b) => a.id !== b.id))
+                .attr('class', 'names')
+                .attr('d', path);
+        });
+    }
+
+    function click(d) {
+        d3.select(this).attr("fill", "black")
+    }
+
+    function isSelected(coords, x, y) {
+        let x0 = coords[0][0],
+            x1 = coords[1][0],
+            y0 = coords[0][1],
+            y1 = coords[1][1];
+
+        return x0 <= x && x <= x1 && y0 <= y && y <= y1;
+    }
+
+</script>
+</body>
+</html>
