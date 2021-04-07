@@ -34,7 +34,7 @@
         font-family: Verdana;
         margin-top: -25px;
         position: absolute;
-        left: 40%;
+        left: 45%;
         top: 92%;
         width: 500px;
         height: 500px;
@@ -44,11 +44,11 @@
 
 </style>
 <body>
-<svg id="map" height="500px" width="1000px" , style="border: solid 1px #000; margin-top: 10px; background-color: #BFE8FF; margin:0 -25px;"">
+<svg id="map" height="500px" width="1000px" , style="border: solid 1px #000; margin-top: 10px; background-color: #BFE8FF; margin:0 -25px;">
     <g id="body2"></g>
 </svg>
 <button onclick="reset()" style="width:5%;" >Reset</button>
-<svg id="scatter" height="480" width="350" , style="margin-top: 10px;">
+<svg id="scatter" height="480" width="400" , style="margin-top: 10px;">
     <g id="body3"></g>
     <g id="yAxis"></g>
     <g id="xAxis"></g>
@@ -230,7 +230,7 @@
             yAxis = d3.axisLeft().scale(yScale);
 
         // don't want dots overlapping axis, so add in buffer to data domain
-        xScale.domain([-3, 9]);
+        xScale.domain([-3, 6]);
         yScale.domain([0, 110]);
 
         let yAxisGroup = d3.select("#yAxis")
@@ -272,6 +272,39 @@
             .transition()
             .attr("cx", xMap)
             .attr("cy", yMap)
+
+        // draw legend
+        var legend = scatter.append("g").attr("class", "legend-group").selectAll(".legend")
+            .data(color.domain())
+            .enter().append("g")
+            .attr("class", "legend")
+            .attr("transform", function(d, i) { return "translate(-100," + (i+1) * 20 + ")"; });
+
+        // draw legend colored rectangles
+        legend.append("rect")
+            .attr("x", width/2 + 4)
+            .attr("width", 18)
+            .attr("height", 18)
+            .style("fill", (d,i)=> color(d-0.0001));
+
+        // draw legend text
+        legend.append("text")
+            .attr("x", width/2 - 3)
+            .attr("y", 9)
+            .attr("dy", ".35em")
+            .style("text-anchor", "end")
+            .text(function(d) { return "< "+d;});
+
+        scatter.select("g.legend-group")
+            .append("g")
+            .attr("class", "legend")
+            .attr("transform", "translate(-100,0)")
+            .append("text")
+            .attr("x", width/2+22)
+            .attr("y", 0)
+            .attr("dy", "1.5em")
+            .style("text-anchor", "end")
+            .text(fieldColor);
 
         zoom.scaleExtent([1,5])
         zoom.on("zoom", function(){
