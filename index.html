@@ -56,7 +56,7 @@
         <h3>Selected</h3>
         <p id="result" width="300px"></p>
         <p id="result2" width="300px"></p>
-        Please try either the zoom or brush feature but not both simultaneously.
+        Please try either the zoom or brush tool, but not both simultaneously.
     </div>
 </svg>
 <script src="d3.js"></script>
@@ -79,6 +79,7 @@
     let body = d3.select("#body3")
     let scatter = d3.select("#scatter")
     let zoom = d3.zoom()
+    let brush = d3.brush()
 
     const margin = {top: 0, right: 0, bottom: 0, left: 0};
     const width = 960 - margin.left - margin.right;
@@ -129,7 +130,6 @@
 
         who.forEach(d => { fertilityById[d.id] = +d[fieldColor]; });
         countries.features.forEach(d => { d.population = fertilityById[d.id] });
-        let brush = d3.brush()
 
         body.append("g").call(brush)
         brush.on("brush", function(){
@@ -309,7 +309,7 @@
 
     }
 
-function reset(){
+    function reset(){
         scatter.transition()
             .duration(100)
             .call(zoom.transform, d3.zoomIdentity.scale(1));
